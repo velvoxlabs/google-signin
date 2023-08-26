@@ -45,7 +45,8 @@ const mockGoogleSignin: typeof GoogleSigninSingleton = {
     .fn()
     .mockResolvedValue({ accessToken: 'mockAccessToken', idToken: 'mockIdToken' }),
   signIn: jest.fn().mockResolvedValue(mockUserInfo),
-  oneTap: jest.fn().mockResolvedValue(mockUserInfo),
+  oneTapSignIn: jest.fn().mockResolvedValue(mockUserInfo),
+  oneTapSignUp: jest.fn().mockResolvedValue(mockUserInfo),
   signInSilently: jest.fn().mockResolvedValue(mockUserInfo),
   revokeAccess: jest.fn().mockResolvedValue(null),
   signOut: jest.fn().mockResolvedValue(null),

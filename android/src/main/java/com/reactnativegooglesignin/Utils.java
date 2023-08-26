@@ -62,11 +62,12 @@ public class Utils {
       Uri photoUrl = credential.getProfilePictureUri();
 
       WritableMap user = Arguments.createMap();
-      user.putString("id", credential.getId());
+      // One Tap Auth does not return the Google Account ID
+      user.putString("id", null);
       user.putString("name", credential.getDisplayName());
       user.putString("givenName", credential.getGivenName());
       user.putString("familyName", credential.getFamilyName());
-      user.putString("email", null);
+      user.putString("email", credential.getId());
       user.putString("photo", photoUrl != null ? photoUrl.toString() : null);
 
       WritableMap params = Arguments.createMap();
@@ -100,6 +101,17 @@ public class Utils {
         }
         return googleSignInOptionsBuilder.build();
     }
+
+    static GoogleIdTokenRequestOptions getIdTokenRequestOptions(final String webClientId, final boolean filterAccount) {
+      GoogleIdTokenRequestOptions.Builder options = new GoogleIdTokenRequestOptions.Builder();
+
+      options.setSupported(true);
+      options.setServerClientId(webClientId);
+      options.setFilterByAuthorizedAccounts(filterAccount);
+
+      return options.build();
+    }
+
 
     @NonNull
     static Scope[] createScopesArray(ReadableArray scopes) {

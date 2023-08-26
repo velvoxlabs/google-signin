@@ -49,11 +49,17 @@ export default class GoogleSigninSampleApp extends Component<{}, State> {
       offlineAccess: false,
       profileImageSize: PROFILE_IMAGE_SIZE,
     });
+    GoogleSignin.configureOneTap({
+      webClientId: config.webClientId,
+      autoSelectEnabled: false,
+      filterByAuthorizedAccounts: false,
+    });
   }
 
   async _getCurrentUser() {
     try {
-      const userInfo = await GoogleSignin.signInSilently();
+      // const userInfo = await GoogleSignin.signInSilently();
+      const userInfo = await GoogleSignin.oneTapSignIn();
       this.setState({ userInfo, error: undefined });
     } catch (error) {
       const typedError = error as NativeModuleError;

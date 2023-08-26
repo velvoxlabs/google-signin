@@ -52,9 +52,13 @@ class GoogleSignin {
     this.configPromise = RNGoogleSignin.configure(options);
   }
 
-  configureOneTap(options: OneTapConfigureParams) {
+  configureOneTap(options: OneTapConfigureParams): void {
     if (IS_IOS) {
       throw new Error('RNGoogleSignin: configureOneTap is only available on Android');
+    }
+
+    if (!options.webClientId) {
+      throw new Error('RNGoogleSignin: configureOneTap requires server web ClientID');
     }
 
     this.oneTapConfigPromise = RNGoogleSignin.configureOneTap(options);
@@ -79,9 +83,14 @@ class GoogleSignin {
     return RNGoogleSignin.signInSilently();
   }
 
-  async oneTap(): Promise<User> {
+  async oneTapSignIn(): Promise<User> {
     await this.oneTapConfigPromise;
-    return RNGoogleSignin.oneTap();
+    return RNGoogleSignin.oneTapSignIn();
+  }
+
+  async oneTapSignUp(): Promise<User> {
+    await this.oneTapConfigPromise;
+    return RNGoogleSignin.oneTapSignUp();
   }
 
   async signOut(): Promise<null> {

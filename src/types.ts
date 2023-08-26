@@ -89,6 +89,18 @@ export interface OneTapConfigureParams {
    * Web client ID from Developer Console. Required for offline access
    */
   webClientId: string;
+
+  /**
+   * Sets whether to only allow the user to select from Google accounts that are already authorized to sign in to your application. (Default is true)
+   * Set this to false if you are wanting to use the Sign Up flow
+   */
+  filterByAuthorizedAccounts?: boolean;
+
+  /**
+   * For users who opt-in, Auto Select allows a credential to be selected automatically without waiting for a user action (Default is true)
+   * Set this to false if you are wanting to use the Sign Up flow
+   */
+  autoSelectEnabled?: boolean;
 }
 
 export interface User {

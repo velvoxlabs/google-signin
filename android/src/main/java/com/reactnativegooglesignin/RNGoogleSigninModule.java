@@ -3,6 +3,7 @@ package com.reactnativegooglesignin;
 import static com.reactnativegooglesignin.PromiseWrapper.ASYNC_OP_IN_PROGRESS;
 import static com.reactnativegooglesignin.Utils.createScopesArray;
 import static com.reactnativegooglesignin.Utils.getExceptionCode;
+import static com.reactnativegooglesignin.Utils.getIdTokenRequestOptions;
 import static com.reactnativegooglesignin.Utils.getSignInOptions;
 import static com.reactnativegooglesignin.Utils.getUserProperties;
 import static com.reactnativegooglesignin.Utils.scopesToString;
@@ -79,6 +80,8 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     public static final String PLAY_SERVICES_NOT_AVAILABLE = "PLAY_SERVICES_NOT_AVAILABLE";
     public static final String ERROR_USER_RECOVERABLE_AUTH = "ERROR_USER_RECOVERABLE_AUTH";
     private static final String SHOULD_RECOVER = "SHOULD_RECOVER";
+
+    private boolean oneTapSignedIn;
 
     private PendingAuthRecovery pendingAuthRecovery;
 
@@ -163,20 +166,33 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void configureOneTap(final ReadableMap config, final Promise promise) {
       final String webClientId = config.hasKey("webClientId") ? config.getString("webClientId") : null;
+      final boolean filterByAuthorizedAccounts = config.hasKey("filterByAuthorizedAccounts") ? config.getBoolean("filterByAuthorizedAccounts") : true;
+      final boolean autoSelect = config.hasKey("autoSelectEnabled") ? config.getBoolean("autoSelectEnabled") : true;
+
       _oneTapClient = Identity.getSignInClient(getReactApplicationContext());
       signInRequest = BeginSignInRequest.builder()
         .setGoogleIdTokenRequestOptions(
-          GoogleIdTokenRequestOptions.builder()
-            .setSupported(true)
-            .setServerClientId(webClientId)
-            .setFilterByAuthorizedAccounts(true).build()
-        ).setAutoSelectEnabled(true)
+         getIdTokenRequestOptions(webClientId, filterByAuthorizedAccounts)
+        ).setAutoSelectEnabled(autoSelect)
         .build();
+
       promise.resolve(null);
     }
 
     @ReactMethod
-    public void oneTap(Promise promise) {
+    public void oneTapSignIn(Promise promise) {
+      promiseWrapper.setPromiseWithInProgressCheck(promise, "oneTap");
+
+      handleOneTapRequest(promise, ONE_TAP_SIGN_IN_SUCCESS);
+    }
+    @ReactMethod
+    public void oneTapSignUp(Promise promise) {
+      promiseWrapper.setPromiseWithInProgressCheck(promise, "oneTap");
+
+      handleOneTapRequest(promise, ONE_TAP_SIGN_UP_SUCCESS);
+    }
+
+    private void handleOneTapRequest(Promise promise, int code) {
       if (_oneTapClient == null) {
         rejectWithNullClientError(promise);
         return;
@@ -187,34 +203,15 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
         rejectWithNullActivity(promise);
         return;
       }
-
-      promiseWrapper.setPromiseWithInProgressCheck(promise, "oneTap");
-      UiThreadUtil.runOnUiThread(new Runnable() {
-        @Override
-        public void run() {
-
-          _oneTapClient.beginSignIn(signInRequest).addOnSuccessListener(activity, new OnSuccessListener<BeginSignInResult>() {
-              @Override
-              public void onSuccess(BeginSignInResult result) {
-                try {
-                  activity.startIntentSenderForResult(
-                    result.getPendingIntent().getIntentSender(), ONE_TAP_SIGN_IN_SUCCESS, null, 0,0,0);
-                } catch (IntentSender.SendIntentException e) {
-                  Log.e(MODULE_NAME, "Couldn't start One Tap UI: " + e.getLocalizedMessage());
-                }
-              }
-            })
-            .addOnFailureListener(activity, new OnFailureListener() {
-              @Override
-              public void onFailure(@NonNull Exception e) {
-                // No saved credentials found. Launch the One Tap sign-up flow, or
-                // do nothing and continue presenting the signed-out UI.
-                Log.d(MODULE_NAME, "One Tap UI: Failure: " + e.getLocalizedMessage());
-              }
-            });
-
+      UiThreadUtil.runOnUiThread(() -> _oneTapClient.beginSignIn(signInRequest).addOnSuccessListener(activity, result -> {
+        try {
+          activity.startIntentSenderForResult(
+            result.getPendingIntent().getIntentSender(), code, null, 0,0,0);
+        } catch (IntentSender.SendIntentException e) {
+          Log.e(MODULE_NAME, "Couldn't start One Tap UI: " + e.getLocalizedMessage());
         }
-      });
+      })
+        .addOnFailureListener(activity, e -> Log.d(MODULE_NAME, "One Tap UI: Failure: " + e.getLocalizedMessage())));
     }
 
     @ReactMethod
@@ -259,7 +256,7 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
         }
     }
 
-    private void handleOneTapSignIn(SignInCredential credential) {
+    private void handleOneTapSignInResult(SignInCredential credential) {
       WritableMap userParams = getUserProperties(credential);
       promiseWrapper.resolve(userParams);
     }
@@ -333,15 +330,13 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
             } else if (requestCode == ONE_TAP_SIGN_IN_SUCCESS) {
               try {
                 SignInCredential credential = _oneTapClient.getSignInCredentialFromIntent(intent);
-                handleOneTapSignIn(credential);
+                oneTapSignedIn = true;
+                handleOneTapSignInResult(credential);
 
               } catch (ApiException e) {
-                // ...
-                promiseWrapper.reject(MODULE_NAME, "Failed to authenticate");
+                Log.d(MODULE_NAME, "One Tap Failure: " + e.getLocalizedMessage());
+                promiseWrapper.reject(MODULE_NAME, "Failed to retrieve a credential");
               }
-
-            } else if (requestCode == ONE_TAP_SIGN_UP_SUCCESS) {
-
             }
         }
     }
@@ -358,9 +353,16 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void signOut(final Promise promise) {
-        if (_apiClient == null) {
+        if (_apiClient == null && _oneTapClient == null) {
             rejectWithNullClientError(promise);
             return;
+        }
+
+        if (_apiClient == null) {
+          _oneTapClient.signOut().addOnCompleteListener(result -> {
+            handleSignOutOrRevokeAccessTask(result, promise);
+          });
+          return;
         }
 
         _apiClient.signOut()
@@ -400,8 +402,8 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void isSignedIn(Promise promise) {
-        boolean isSignedIn = GoogleSignIn.getLastSignedInAccount(getReactApplicationContext()) != null;
-        promise.resolve(isSignedIn);
+      boolean isSignedIn = GoogleSignIn.getLastSignedInAccount(getReactApplicationContext()) != null || oneTapSignedIn;
+      promise.resolve(isSignedIn);
     }
 
     @ReactMethod
