@@ -19,7 +19,7 @@ def safeExtGet(prop, fallback) {
 
 android {
     compileSdkVersion safeExtGet('compileSdkVersion', 30)
-    buildToolsVersion safeExtGet('buildToolsVersion', '30.0.2')
+    buildToolsVersion safeExtGet('buildToolsVersion', '30.0.3')
     defaultConfig {
         minSdkVersion safeExtGet('minSdkVersion', 21)
         targetSdkVersion safeExtGet('targetSdkVersion', 30)
@@ -53,5 +53,5 @@ repositories {
 dependencies {
     //noinspection GradleDynamicVersion
     implementation "com.facebook.react:react-native:+"  // From node_modules
-    implementation "com.google.android.gms:play-services-auth:${safeExtGet('googlePlayServicesAuthVersion', '20.5.0')}"
+    implementation "com.google.android.gms:play-services-auth:${safeExtGet('googlePlayServicesAuthVersion', '20.6.0')}"
 }

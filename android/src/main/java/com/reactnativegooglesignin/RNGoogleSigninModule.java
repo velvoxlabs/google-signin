@@ -9,7 +9,9 @@ import static com.reactnativegooglesignin.Utils.scopesToString;
 
 import android.accounts.Account;
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.IntentSender;
 import android.os.AsyncTask;
 import android.util.Log;
 
@@ -30,6 +32,12 @@ import com.facebook.react.module.annotations.ReactModule;
 import com.google.android.gms.auth.GoogleAuthException;
 import com.google.android.gms.auth.GoogleAuthUtil;
 import com.google.android.gms.auth.UserRecoverableAuthException;
+import com.google.android.gms.auth.api.identity.BeginSignInRequest;
+import com.google.android.gms.auth.api.identity.BeginSignInRequest.GoogleIdTokenRequestOptions;
+import com.google.android.gms.auth.api.identity.BeginSignInResult;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.auth.api.identity.SignInClient;
+import com.google.android.gms.auth.api.identity.SignInCredential;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
@@ -42,6 +50,8 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
 import java.io.IOException;
@@ -54,9 +64,17 @@ import java.util.Map;
 public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     private GoogleSignInClient _apiClient;
 
+    private SignInClient _oneTapClient;
+
+    private BeginSignInRequest signInRequest;
+
     public static final int RC_SIGN_IN = 9001;
     public static final int REQUEST_CODE_RECOVER_AUTH = 53294;
     public static final int REQUEST_CODE_ADD_SCOPES = 53295;
+
+    public static final int ONE_TAP_SIGN_IN_SUCCESS = 9003;
+    public static final int ONE_TAP_SIGN_UP_SUCCESS = 9003;
+
     public static final String MODULE_NAME = "RNGoogleSignin";
     public static final String PLAY_SERVICES_NOT_AVAILABLE = "PLAY_SERVICES_NOT_AVAILABLE";
     public static final String ERROR_USER_RECOVERABLE_AUTH = "ERROR_USER_RECOVERABLE_AUTH";
@@ -143,6 +161,63 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void configureOneTap(final ReadableMap config, final Promise promise) {
+      final String webClientId = config.hasKey("webClientId") ? config.getString("webClientId") : null;
+      _oneTapClient = Identity.getSignInClient(getReactApplicationContext());
+      signInRequest = BeginSignInRequest.builder()
+        .setGoogleIdTokenRequestOptions(
+          GoogleIdTokenRequestOptions.builder()
+            .setSupported(true)
+            .setServerClientId(webClientId)
+            .setFilterByAuthorizedAccounts(true).build()
+        ).setAutoSelectEnabled(true)
+        .build();
+      promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void oneTap(Promise promise) {
+      if (_oneTapClient == null) {
+        rejectWithNullClientError(promise);
+        return;
+      }
+      final Activity activity = getCurrentActivity();
+
+      if (activity == null) {
+        rejectWithNullActivity(promise);
+        return;
+      }
+
+      promiseWrapper.setPromiseWithInProgressCheck(promise, "oneTap");
+      UiThreadUtil.runOnUiThread(new Runnable() {
+        @Override
+        public void run() {
+
+          _oneTapClient.beginSignIn(signInRequest).addOnSuccessListener(activity, new OnSuccessListener<BeginSignInResult>() {
+              @Override
+              public void onSuccess(BeginSignInResult result) {
+                try {
+                  activity.startIntentSenderForResult(
+                    result.getPendingIntent().getIntentSender(), ONE_TAP_SIGN_IN_SUCCESS, null, 0,0,0);
+                } catch (IntentSender.SendIntentException e) {
+                  Log.e(MODULE_NAME, "Couldn't start One Tap UI: " + e.getLocalizedMessage());
+                }
+              }
+            })
+            .addOnFailureListener(activity, new OnFailureListener() {
+              @Override
+              public void onFailure(@NonNull Exception e) {
+                // No saved credentials found. Launch the One Tap sign-up flow, or
+                // do nothing and continue presenting the signed-out UI.
+                Log.d(MODULE_NAME, "One Tap UI: Failure: " + e.getLocalizedMessage());
+              }
+            });
+
+        }
+      });
+    }
+
+    @ReactMethod
     public void signInSilently(Promise promise) {
         if (_apiClient == null) {
             rejectWithNullClientError(promise);
@@ -182,6 +257,11 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
             String errorDescription = GoogleSignInStatusCodes.getStatusCodeString(code);
             promiseWrapper.reject(String.valueOf(code), errorDescription);
         }
+    }
+
+    private void handleOneTapSignIn(SignInCredential credential) {
+      WritableMap userParams = getUserProperties(credential);
+      promiseWrapper.resolve(userParams);
     }
 
     @ReactMethod
@@ -250,6 +330,18 @@ public class RNGoogleSigninModule extends ReactContextBaseJavaModule {
                 } else {
                   promiseWrapper.reject(MODULE_NAME, "Failed to add scopes.");
                 }
+            } else if (requestCode == ONE_TAP_SIGN_IN_SUCCESS) {
+              try {
+                SignInCredential credential = _oneTapClient.getSignInCredentialFromIntent(intent);
+                handleOneTapSignIn(credential);
+
+              } catch (ApiException e) {
+                // ...
+                promiseWrapper.reject(MODULE_NAME, "Failed to authenticate");
+              }
+
+            } else if (requestCode == ONE_TAP_SIGN_UP_SUCCESS) {
+
             }
         }
     }

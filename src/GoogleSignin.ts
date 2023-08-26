@@ -5,6 +5,7 @@ import type {
   ConfigureParams,
   HasPlayServicesParams,
   User,
+  OneTapConfigureParams,
 } from './types';
 
 const { RNGoogleSignin } = NativeModules;
@@ -13,6 +14,7 @@ const IS_IOS = Platform.OS === 'ios';
 
 class GoogleSignin {
   configPromise?: Promise<void>;
+  oneTapConfigPromise?: Promise<void>;
 
   constructor() {
     if (__DEV__ && !RNGoogleSignin) {
@@ -50,6 +52,14 @@ class GoogleSignin {
     this.configPromise = RNGoogleSignin.configure(options);
   }
 
+  configureOneTap(options: OneTapConfigureParams) {
+    if (IS_IOS) {
+      throw new Error('RNGoogleSignin: configureOneTap is only available on Android');
+    }
+
+    this.oneTapConfigPromise = RNGoogleSignin.configureOneTap(options);
+  }
+
   async addScopes(options: AddScopesParams): Promise<User | null> {
     if (IS_IOS) {
       return RNGoogleSignin.addScopes(options);
@@ -67,6 +77,11 @@ class GoogleSignin {
   async signInSilently(): Promise<User> {
     await this.configPromise;
     return RNGoogleSignin.signInSilently();
+  }
+
+  async oneTap(): Promise<User> {
+    await this.oneTapConfigPromise;
+    return RNGoogleSignin.oneTap();
   }
 
   async signOut(): Promise<null> {

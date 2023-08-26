@@ -84,6 +84,13 @@ export interface ConfigureParams {
   profileImageSize?: number;
 }
 
+export interface OneTapConfigureParams {
+  /**
+   * Web client ID from Developer Console. Required for offline access
+   */
+  webClientId: string;
+}
+
 export interface User {
   user: {
     id: string;

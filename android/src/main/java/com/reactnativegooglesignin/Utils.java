@@ -7,6 +7,9 @@ import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
+import com.google.android.gms.auth.api.identity.BeginSignInRequest;
+import com.google.android.gms.auth.api.identity.BeginSignInRequest.GoogleIdTokenRequestOptions;
+import com.google.android.gms.auth.api.identity.SignInCredential;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
 import com.google.android.gms.common.api.ApiException;
@@ -14,6 +17,8 @@ import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.common.Scopes;
 import com.google.android.gms.tasks.Task;
+
+import org.jetbrains.annotations.NotNull;
 
 public class Utils {
 
@@ -53,6 +58,24 @@ public class Utils {
         return params;
     }
 
+    static WritableMap getUserProperties(@NotNull SignInCredential credential) {
+      Uri photoUrl = credential.getProfilePictureUri();
+
+      WritableMap user = Arguments.createMap();
+      user.putString("id", credential.getId());
+      user.putString("name", credential.getDisplayName());
+      user.putString("givenName", credential.getGivenName());
+      user.putString("familyName", credential.getFamilyName());
+      user.putString("email", null);
+      user.putString("photo", photoUrl != null ? photoUrl.toString() : null);
+
+      WritableMap params = Arguments.createMap();
+      params.putMap("user", user);
+      params.putString("idToken", credential.getGoogleIdToken());
+
+      return params;
+    }
+
     static GoogleSignInOptions getSignInOptions(
             final Scope[] scopes,
             final String webClientId,
@@ -89,6 +112,7 @@ public class Utils {
         }
         return _scopes;
     }
+
 
     public static int getExceptionCode(@NonNull Task<Void> task) {
         Exception e = task.getException();

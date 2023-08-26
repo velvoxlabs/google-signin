@@ -39,11 +39,13 @@ const mockStatusCodes = {
 
 const mockGoogleSignin: typeof GoogleSigninSingleton = {
   configure: jest.fn(),
+  configureOneTap: jest.fn(),
   hasPlayServices: jest.fn().mockResolvedValue(true),
   getTokens: jest
     .fn()
     .mockResolvedValue({ accessToken: 'mockAccessToken', idToken: 'mockIdToken' }),
   signIn: jest.fn().mockResolvedValue(mockUserInfo),
+  oneTap: jest.fn().mockResolvedValue(mockUserInfo),
   signInSilently: jest.fn().mockResolvedValue(mockUserInfo),
   revokeAccess: jest.fn().mockResolvedValue(null),
   signOut: jest.fn().mockResolvedValue(null),
